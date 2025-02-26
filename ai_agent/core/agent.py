@@ -76,7 +76,6 @@ class Agent:
         # 1. 应用所有插件的预处理
         processed_input = self._apply_pre_process(input_text)
 
-        print(input_text)
         
         try:
             # 2. 获取输出处理器

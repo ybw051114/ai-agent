@@ -40,13 +40,22 @@ DEEPSEEK_API_KEY=你的DeepSeek API密钥
 
 或在配置文件中设置:
 
-```yaml
-provider: deepseek  # 使用 DeepSeek 作为提供商
-api_key: your-api-key-here
-model: deepseek-chat  # 可选，默认为 deepseek-chat
-temperature: 0.7     # 可选，默认为 0.7
-max_tokens: 2000     # 可选，默认为 2000
-stream: true        # 可选，默认为 true
+```toml
+# AI提供商配置
+provider = "deepseek"  # 可选: openai, deepseek等
+api_key = "sk-1185ca8f54164a3b9db38e02088007d5"  # 你的API密钥
+model = "deepseek-chat"  # 使用的模型名称
+
+# 模型参数配置
+temperature = 0.7  # 温度参数(0-1),越高越随机
+max_tokens = 2000  # 单次请求最大token数
+stream = true  # 是否启用流式输出
+
+# 输出配置
+output = "terminal"  # 输出方式,目前支持terminal
+
+# 插件配置
+plugins = []  # 启用的插件列表,例如 ["translator"]
 ```
 
 ## 开发

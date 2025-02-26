@@ -101,7 +101,6 @@ class ConfigManager:
             config_path: 配置文件路径
         """
         import tomli
-        print(config_path)
         
         try:
             with open(config_path, "rb") as f:
