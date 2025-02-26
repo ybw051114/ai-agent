@@ -86,9 +86,6 @@ class TerminalOutput(BaseOutput):
                     self.console.print(buffer, style=self.default_style, end="")
                     buffer = ""
             
-            # 确保内容立即显示
-            self.console.flush()
-            
             # 添加小延迟以实现流畅的打印效果
             await asyncio.sleep(0.01)
             

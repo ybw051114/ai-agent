@@ -51,14 +51,14 @@ class Agent:
             
             # 4. 输出结果
             output = self.output_manager.get_output(output_name)
-            await output.render(processed_output)
+            output.render(processed_output)
             
             return processed_output
             
         except Exception as e:
             # 处理错误并通过当前输出处理器显示
             error_message = f"处理失败: {str(e)}"
-            await self.output_manager.get_output(output_name).render(error_message)
+            self.output_manager.get_output(output_name).render(error_message)
             raise
     
     async def process_stream(
@@ -75,6 +75,8 @@ class Agent:
         """
         # 1. 应用所有插件的预处理
         processed_input = self._apply_pre_process(input_text)
+
+        print(input_text)
         
         try:
             # 2. 获取输出处理器
@@ -83,17 +85,26 @@ class Agent:
             # 3. 流式生成并处理回答
             response_stream = self.provider.stream_response(processed_input)
             
-            # 4. 流式输出
+            # 4. 流式输出并收集完整文本
             final_text = ""
-            await output.render_stream(response_stream)
+            buffer = []
             async for chunk in response_stream:
                 final_text += chunk
+                buffer.append(chunk)
+                if chunk.endswith((" ", "\n", ".", "!", "?")):
+                    output.render("".join(buffer))
+                    buffer = []
+            
+            # 输出剩余内容
+            if buffer:
+                output.render("".join(buffer))
+                
             return final_text
             
         except Exception as e:
             # 处理错误并通过当前输出处理器显示
             error_message = f"处理失败: {str(e)}"
-            await self.output_manager.get_output(output_name).render(error_message)
+            self.output_manager.get_output(output_name).render(error_message)
             raise
     
     def _apply_pre_process(self, input_text: str) -> str:
