@@ -6,7 +6,7 @@ from typing import Any, Dict, Optional
 from ..plugins.base import BasePlugin, register_plugin
 
 @register_plugin("translator")
-class TranslatorPlugin(BasePlugin):
+class Plugin(BasePlugin):
     """翻译插件，用于在AI处理前后进行文本翻译。"""
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -87,7 +87,7 @@ class TranslatorPlugin(BasePlugin):
 def test_translator_plugin():
     """测试翻译插件的功能。"""
     # 创建插件实例
-    plugin = TranslatorPlugin({
+    plugin = Plugin({
         "source_lang": "zh",
         "target_lang": "en"
     })
@@ -106,7 +106,7 @@ def test_translator_plugin():
     assert plugin.validate_config()
     
     # 测试无效配置
-    invalid_plugin = TranslatorPlugin({
+    invalid_plugin = Plugin({
         "source_lang": "invalid",
         "target_lang": "en"
     })
