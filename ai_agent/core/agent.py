@@ -1,7 +1,8 @@
 """
 AI代理的核心实现。
 """
-from typing import Any, Dict, List, Optional, Type
+import asyncio
+from typing import Any, Dict, List, Optional, AsyncGenerator
 
 from ..output.base import BaseOutput, OutputManager
 from ..plugins.base import BasePlugin, PluginManager
@@ -50,15 +51,22 @@ class Agent:
             processed_output = self._apply_post_process(response)
             
             # 4. 输出结果
-            output = self.output_manager.get_output(output_name)
-            output.render(processed_output)
+            outputs = []
+            if isinstance(self.config.get("output"), list):
+                outputs = [self.output_manager.get_output(name) for name in self.config["output"]]
+            else:
+                outputs = [self.output_manager.get_output(output_name)]
+            
+            for output in outputs:
+                await output.render(processed_output)
             
             return processed_output
             
         except Exception as e:
             # 处理错误并通过当前输出处理器显示
             error_message = f"处理失败: {str(e)}"
-            self.output_manager.get_output(output_name).render(error_message)
+            output = self.output_manager.get_output(output_name)
+            await output.render(error_message)
             raise
     
     async def process_stream(
@@ -72,39 +80,79 @@ class Agent:
         Args:
             input_text: 用户输入的文本
             output_name: 指定使用的输出处理器名称
+            
+        Returns:
+            str: 处理后的完整响应文本
         """
         # 1. 应用所有插件的预处理
         processed_input = self._apply_pre_process(input_text)
 
-        
         try:
-            # 2. 获取输出处理器
-            output = self.output_manager.get_output(output_name)
+            # 2. 获取所有输出处理器
+            outputs = []
+            if isinstance(self.config.get("output"), list):
+                outputs = [self.output_manager.get_output(name) for name in self.config["output"]]
+            else:
+                outputs = [self.output_manager.get_output(output_name)]
             
             # 3. 流式生成并处理回答
             response_stream = self.provider.stream_response(processed_input)
             
             # 4. 流式输出并收集完整文本
-            final_text = ""
-            buffer = []
-            async for chunk in response_stream:
-                final_text += chunk
-                buffer.append(chunk)
-                if chunk.endswith((" ", "\n", ".", "!", "?")):
-                    output.render("".join(buffer))
-                    buffer = []
+            text_parts = []
+            chunks = []
             
-            # 输出剩余内容
-            if buffer:
-                output.render("".join(buffer))
-                
+            # 复制流内容以供后续使用
+            async for chunk in response_stream:
+                text_parts.append(chunk)
+                chunks.append(chunk)
+            
+            # 创建独立的流生成器
+            async def create_stream():
+                for chunk in chunks:
+                    await asyncio.sleep(0.01)  # 模拟真实流式传输
+                    yield chunk
+            
+            # 为每个输出处理器创建独立的流
+            stream_tasks = []
+            for output in outputs:
+                stream = create_stream()
+                task = asyncio.create_task(output.render_stream(stream))
+                stream_tasks.append(task)
+            
+            # 等待所有输出处理完成
+            await asyncio.gather(*stream_tasks)
+
+            # 返回完整响应文本
+            final_text = "".join(text_parts).strip()
             return final_text
             
         except Exception as e:
             # 处理错误并通过当前输出处理器显示
             error_message = f"处理失败: {str(e)}"
-            self.output_manager.get_output(output_name).render(error_message)
+            output = self.output_manager.get_output(output_name)
+            await output.render(error_message)
             raise
+            
+    async def _chunk_to_stream(self, text: str) -> AsyncGenerator[str, None]:
+        """
+        将文本转换为流式输出。
+        
+        Args:
+            text: 要输出的文本
+            
+        Yields:
+            str: 每个输出片段
+        """
+        # 按空格或标点分割文本
+        buffer = ""
+        for char in text:
+            buffer += char
+            if char in (" ", "\n", ".", "!", "?"):
+                yield buffer
+                buffer = ""
+        if buffer:  # 输出剩余内容
+            yield buffer
     
     def _apply_pre_process(self, input_text: str) -> str:
         """

@@ -30,7 +30,7 @@ class TerminalOutput(BaseOutput):
         self.console = Console(**config if config else {})
         self.default_style = Style(color="cyan")
         
-    def render(self, content: str) -> None:
+    async def render(self, content: str) -> None:
         """
         渲染内容到终端。
         
@@ -43,7 +43,8 @@ class TerminalOutput(BaseOutput):
         if self._is_markdown(content):
             # 渲染Markdown
             markdown = Markdown(content)
-            self.console.print(Panel(markdown, border_style="blue"))
+            await asyncio.get_event_loop().run_in_executor(None, 
+                lambda: self.console.print(Panel(markdown, border_style="blue")))
         else:
             # 检测是否包含代码块
             if "```" in content:
@@ -56,12 +57,15 @@ class TerminalOutput(BaseOutput):
                         code = "\n".join(lines[1:-1])
                         # 渲染代码块
                         syntax = Syntax(code, lang, theme="monokai")
-                        self.console.print(Panel(syntax, border_style="green"))
+                        await asyncio.get_event_loop().run_in_executor(None, 
+                            lambda: self.console.print(Panel(syntax, border_style="green")))
                     else:
-                        self.console.print(part, style=self.default_style)
+                        await asyncio.get_event_loop().run_in_executor(None, 
+                            lambda: self.console.print(part, style=self.default_style))
             else:
                 # 普通文本
-                self.console.print(content, style=self.default_style)
+                await asyncio.get_event_loop().run_in_executor(None, 
+                    lambda: self.console.print(content, style=self.default_style))
     
     async def render_stream(self, content_stream) -> None:
         """
@@ -70,28 +74,24 @@ class TerminalOutput(BaseOutput):
         Args:
             content_stream: 内容流迭代器
         """
+        chunks = []
         buffer = ""
         async for chunk in content_stream:
-            # 如果接收到完整的代码块标记，先输出之前的内容
-            if "```" in chunk:
-                if buffer:
-                    self.console.print(buffer, style=self.default_style, end="")
-                    buffer = ""
-                self.console.print(chunk, style=self.default_style, end="")
-            else:
-                # 累积普通文本
-                buffer += chunk
-                # 在完整的单词处输出
-                if buffer.endswith((" ", "\n", ".", "!", "?")):
-                    self.console.print(buffer, style=self.default_style, end="")
-                    buffer = ""
+            chunks.append(chunk)
+            buffer += chunk
+            # 当遇到断句符号时输出
+            if chunk.endswith((" ", "\n", ".", "!", "?")):
+                await asyncio.get_event_loop().run_in_executor(None, 
+                    lambda text=buffer: self.console.print(text, style=self.default_style, end=""))
+                buffer = ""
             
             # 添加小延迟以实现流畅的打印效果
             await asyncio.sleep(0.01)
-            
-        # 输出剩余的缓冲内容
+        
+        # 输出剩余内容
         if buffer:
-            self.console.print(buffer, style=self.default_style)
+            await asyncio.get_event_loop().run_in_executor(None, 
+                lambda: self.console.print(buffer, style=self.default_style))
     
     def _is_markdown(self, content: str) -> bool:
         """

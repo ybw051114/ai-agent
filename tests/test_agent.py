@@ -25,9 +25,8 @@ class MockProvider(BaseProvider):
         
     async def stream_response(self, prompt: str) -> AsyncGenerator[str, None]:
         self.last_prompt = prompt
-        for word in self.response.split():
-            yield word + " "
-            await asyncio.sleep(0.01)
+        yield "Hello "  # 第一个chunk
+        yield "World"   # 第二个chunk
 
 class MockPlugin(BasePlugin):
     """模拟的插件。"""
@@ -52,7 +51,7 @@ class MockOutput(BaseOutput):
     async def render_stream(self, content_stream) -> None:
         async for chunk in content_stream:
             self.stream_output.append(chunk)
-            await self.render(chunk)
+            self.last_output = chunk
 
 @pytest.fixture
 def mock_provider():
@@ -75,10 +74,10 @@ async def test_agent_basic_processing(mock_provider, mock_output):
     agent = Agent(mock_provider)
     agent.add_output(mock_output, default=True)
     
-    await agent.process("Test input")
+    result = await agent.process("Test input")
     
     assert mock_provider.last_prompt == "Test input"
-    assert mock_output.last_output == "Hello, World!"
+    assert mock_output.last_output == result == "Hello, World!"
 
 @pytest.mark.asyncio
 async def test_agent_with_plugin(mock_provider, mock_plugin, mock_output):
@@ -87,10 +86,10 @@ async def test_agent_with_plugin(mock_provider, mock_plugin, mock_output):
     agent.add_plugin(mock_plugin)
     agent.add_output(mock_output, default=True)
     
-    await agent.process("Test input")
+    result = await agent.process("Test input")
     
     assert mock_provider.last_prompt == "[Pre] Test input"
-    assert mock_output.last_output == "[Post] Hello, World!"
+    assert mock_output.last_output == result == "[Post] Hello, World!"
 
 @pytest.mark.asyncio
 async def test_agent_stream_processing(mock_provider, mock_output):
@@ -98,10 +97,25 @@ async def test_agent_stream_processing(mock_provider, mock_output):
     agent = Agent(mock_provider)
     agent.add_output(mock_output, default=True)
     
-    await agent.process_stream("Test input")
+    result = await agent.process_stream("Test input")
     
     assert mock_provider.last_prompt == "Test input"
-    assert "".join(mock_output.stream_output).strip() == "Hello, World!"
+    assert result == "Hello World"  # 完整输出
+    assert mock_output.last_output == "World"  # 最后一个chunk
+    assert mock_output.stream_output == ["Hello ", "World"]  # 流式输出记录
+
+@pytest.mark.asyncio
+async def test_agent_stream_with_plugin(mock_provider, mock_plugin, mock_output):
+    """测试带插件的流式处理。"""
+    agent = Agent(mock_provider)
+    agent.add_plugin(mock_plugin)
+    agent.add_output(mock_output, default=True)
+    
+    result = await agent.process_stream("Test input")
+    
+    assert mock_provider.last_prompt == "[Pre] Test input"
+    assert result == "Hello World"  # 完整输出（插件后处理前）
+    assert mock_output.stream_output == ["Hello ", "World"]  # 流式输出记录
 
 def test_agent_builder():
     """测试代理构建器。"""

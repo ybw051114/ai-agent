@@ -14,7 +14,7 @@ class Config:
     
     provider: str = "openai"
     plugins: list = None
-    output: str = "terminal"
+    output: list = None
     api_key: Optional[str] = None
     model: str = "gpt-3.5-turbo"
     temperature: float = 0.7
@@ -24,6 +24,7 @@ class Config:
     def __post_init__(self):
         """初始化后处理。"""
         self.plugins = self.plugins or []
+        self.output = self.output or ["terminal", "conversation"]
 
 class ConfigManager:
     """配置管理器，负责加载和管理配置。"""
@@ -57,7 +58,8 @@ class ConfigManager:
         """从环境变量加载配置。"""
         # API密钥
         if api_key := os.getenv("OPENAI_API_KEY"):
-            self.config.api_key = api_key
+            if not self.config.api_key:  # 只有在未设置时才从环境变量加载
+                self.config.api_key = api_key
         
         # 提供商
         if provider := os.getenv("AI_AGENT_PROVIDER"):

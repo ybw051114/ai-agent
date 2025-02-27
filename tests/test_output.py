@@ -18,7 +18,7 @@ class TestOutput(BaseOutput):
         super().__init__(*args, **kwargs)
         self.output = StringIO()
         
-    def render(self, content: str) -> None:
+    async def render(self, content: str) -> None:
         self.output.write(content)
         
     async def render_stream(self, content_stream) -> None:
@@ -37,23 +37,31 @@ async def mock_stream() -> AsyncGenerator[str, None]:
 def test_output_registration():
     """测试输出处理器注册。"""
     manager = OutputManager()
-    output = TestOutput()
+    output1 = TestOutput()
+    output2 = TestOutput()
     
-    # 测试注册
-    manager.register("test", output)
-    assert manager.get_output("test") is output
+    # 测试注册多个输出处理器
+    manager.register("test1", output1)
+    manager.register("test2", output2)
+    assert manager.get_output("test1") is output1
+    assert manager.get_output("test2") is output2
     
     # 测试默认输出
     default_output = manager.get_output()
-    assert default_output is output
+    assert default_output is output1  # 首个注册的是默认输出
     
     # 测试重复注册
     with pytest.raises(ValueError):
-        manager.register("test", output)
+        manager.register("test1", output1)
+    
+    # 测试注销非默认输出
+    manager.unregister("test2")
+    with pytest.raises(KeyError):
+        manager.get_output("test2")
     
     # 测试注销默认输出
     with pytest.raises(ValueError):
-        manager.unregister("test")
+        manager.unregister("test1")
     
     # 测试获取不存在的输出
     with pytest.raises(KeyError):
@@ -82,7 +90,7 @@ async def test_output_rendering():
     output = TestOutput()
     
     # 测试普通渲染
-    output.render("Hello World!")
+    await output.render("Hello World!")
     assert output.get_output() == "Hello World!"
     
     # 测试流式渲染
@@ -136,7 +144,7 @@ def test_register_output_decorator():
     # 测试正确的装饰器使用
     @register_output("valid")
     class ValidOutput(BaseOutput):
-        def render(self, content: str) -> None:
+        async def render(self, content: str) -> None:
             pass
             
         async def render_stream(self, content_stream) -> None:
@@ -145,7 +153,8 @@ def test_register_output_decorator():
     assert hasattr(ValidOutput, "output_name")
     assert ValidOutput.output_name == "valid"
 
-def test_markdown_rendering():
+@pytest.mark.asyncio
+async def test_markdown_rendering():
     """测试Markdown渲染支持。"""
     output = TestOutput()
     
@@ -161,7 +170,7 @@ def test_markdown_rendering():
     ```
     """
     
-    output.render(markdown_text)
+    await output.render(markdown_text)
     rendered = output.get_output()
     
     assert rendered == markdown_text

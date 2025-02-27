@@ -10,7 +10,7 @@ def test_config_defaults():
     config = Config()
     assert config.provider == "openai"
     assert config.plugins == []
-    assert config.output == "terminal"
+    assert config.output == ["terminal", "conversation"]
     assert config.model == "gpt-3.5-turbo"
     assert config.temperature == 0.7
     assert config.max_tokens == 2000
@@ -29,12 +29,13 @@ def test_config_custom_values():
 
 def test_config_manager_env_vars(monkeypatch):
     """测试从环境变量加载配置。"""
-    # 设置环境变量
+    # 设置测试环境变量
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("AI_AGENT_PROVIDER", "custom")
     monkeypatch.setenv("AI_AGENT_MODEL", "gpt-4")
     monkeypatch.setenv("AI_AGENT_PLUGINS", "plugin1,plugin2")
     
+    # 创建新的配置管理器并加载配置
     manager = ConfigManager()
     manager.load_config()
     

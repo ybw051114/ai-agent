@@ -20,7 +20,7 @@ class BaseOutput(ABC):
         self.config = config or {}
     
     @abstractmethod
-    def render(self, content: str) -> None:
+    async def render(self, content: str) -> None:
         """
         渲染内容。
         
