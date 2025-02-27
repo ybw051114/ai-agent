@@ -7,6 +7,10 @@ from typing import Optional
 
 import click
 from rich.console import Console
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+import os
 
 from .core.agent import AgentBuilder
 from .core.config import config_manager
@@ -180,9 +184,20 @@ def chat(
             console.print("[blue]欢迎使用AI代理。输入'exit'或按Ctrl+C退出。[/blue]")
             while True:
                 try:
+                    # 创建历史记录文件
+                    history_file = os.path.expanduser("~/.ai_agent_history")
+                    
+                    # 创建prompt session
+                    session = PromptSession(
+                        history=FileHistory(history_file),
+                        auto_suggest=AutoSuggestFromHistory(),
+                        enable_history_search=True,
+                        complete_while_typing=True,
+                    )
+                    
                     # 获取用户输入
-                    user_input = click.prompt(">>> ", prompt_suffix="")
-                    if user_input.lower() in ("exit", "quit"):
+                    user_input = await session.prompt_async(">>> ")
+                    if user_input.strip().lower() in ("exit", "quit"):
                         break
                         
                     # 处理用户输入
