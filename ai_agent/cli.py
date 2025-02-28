@@ -17,6 +17,7 @@ from .core.config import config_manager
 from .output.terminal import TerminalOutput
 from .providers.openai import OpenAIProvider
 from .providers.deepseek import DeepSeekProvider
+from .providers.sustech import SustechProvider
 
 console = Console()
 
@@ -41,7 +42,8 @@ def validate_model(provider: str, model: str) -> bool:
     """
     provider_models = {
         "openai": ["gpt-3.5-turbo", "gpt-4"],
-        "deepseek": ["deepseek-chat", "deepseek-coder"]
+        "deepseek": ["deepseek-chat", "deepseek-coder"],
+        "sustech": ["deepseek-r1-250120"]
     }
     
     return model in provider_models.get(provider, [])
@@ -71,7 +73,7 @@ def setup_agent(
     
     # 2. 命令行参数覆盖配置文件
     if provider:
-        if provider not in ["openai", "deepseek"]:
+        if provider not in ["openai", "deepseek", "sustech"]:
             print_error(f"不支持的AI提供商：{provider}")
             sys.exit(1)
         config_manager.config.provider = provider
@@ -82,7 +84,8 @@ def setup_agent(
             print_warning("可用模型：")
             provider_models = {
                 "openai": ["gpt-3.5-turbo", "gpt-4"],
-                "deepseek": ["deepseek-chat", "deepseek-coder"]
+                "deepseek": ["deepseek-chat", "deepseek-coder"],
+                "sustech": ["deepseek-r1-250120"]
             }
             for m in provider_models.get(config_manager.config.provider, []):
                 print_warning(f"  - {m}")
@@ -99,7 +102,8 @@ def setup_agent(
         provider = config_manager.config.provider
         env_var = {
             "openai": "OPENAI_API_KEY",
-            "deepseek": "DEEPSEEK_API_KEY"
+            "deepseek": "DEEPSEEK_API_KEY",
+        "sustech": "SUSTECH_API_KEY"
         }.get(provider, "API_KEY")
         print_error(f"未设置API密钥。请设置{env_var}环境变量或在配置文件中指定。")
         sys.exit(1)
@@ -110,7 +114,8 @@ def setup_agent(
     # 5. 设置AI提供商
     provider_map = {
         "openai": OpenAIProvider,
-        "deepseek": DeepSeekProvider
+        "deepseek": DeepSeekProvider,
+        "sustech": SustechProvider
     }
     
     provider_class = provider_map.get(config_manager.config.provider)
@@ -147,8 +152,8 @@ def cli():
 
 @cli.command()
 @click.argument("prompt", required=False)
-@click.option("-p", "--provider", help="AI提供商 (支持: openai, deepseek)")
-@click.option("-m", "--model", help="模型名称 (openai: gpt-3.5-turbo等, deepseek: deepseek-chat等)")
+@click.option("-p", "--provider", help="AI提供商 (支持: openai, deepseek, sustech)")
+@click.option("-m", "--model", help="模型名称 (openai: gpt-3.5-turbo等, deepseek: deepseek-chat等, sustech: deepseek-r1-250120)")
 @click.option("--plugins", help="要使用的插件，逗号分隔")
 @click.option("-o", "--output", help="输出处理器")
 @click.option("--config", help="配置文件路径")
@@ -168,10 +173,10 @@ def chat(
     if no_stream:
         config_manager.config.stream = False
     
+    # 2. 构建代理
+    agent = builder.build()
+    
     async def run_chat():
-        # 2. 构建代理
-        agent = builder.build()
-        
         # 3. 处理输入
         if prompt:
             # 单次对话模式
@@ -210,7 +215,7 @@ def chat(
                     break
                 except Exception as e:
                     print_error(str(e))
-    
+
     # 4. 运行事件循环
     try:
         asyncio.run(run_chat())
@@ -219,6 +224,18 @@ def chat(
     except Exception as e:
         print_error(f"发生错误：{e}")
         sys.exit(1)
+    finally:
+        if agent:
+            try:
+                # 生成总结并保存对话
+                if hasattr(agent, '_generate_summary'):
+                    asyncio.run(agent._generate_summary())
+                if hasattr(agent, '_save_conversation'):
+                    save_path = agent._save_conversation()
+                    if save_path:
+                        console.print(f"\n[green]对话已保存到：{save_path}[/green]")
+            except Exception as e:
+                print_error(f"保存对话失败：{e}")
 
 @cli.command()
 @click.option("--config", help="配置文件路径")

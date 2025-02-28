@@ -2,6 +2,9 @@
 AI代理的核心实现。
 """
 import asyncio
+import os
+from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, AsyncGenerator
 
 from ..output.base import BaseOutput, OutputManager
@@ -31,6 +34,9 @@ class Agent:
         self.plugin_manager = plugin_manager or PluginManager()
         self.output_manager = output_manager or OutputManager()
         self.config = config or {}
+        self.conversation = []  # 用于保存对话历史
+        self.start_time = datetime.now()  # 会话开始时间
+        self.summary = None  # 对话总结
         
     async def process(self, input_text: str, output_name: Optional[str] = None) -> str:
         """
@@ -42,6 +48,7 @@ class Agent:
         """
         # 1. 应用所有插件的预处理
         processed_input = self._apply_pre_process(input_text)
+        self.conversation.append({"role": "user", "content": processed_input})
         
         try:
             # 2. 调用AI提供商生成回答
@@ -49,6 +56,7 @@ class Agent:
             
             # 3. 应用所有插件的后处理
             processed_output = self._apply_post_process(response)
+            self.conversation.append({"role": "assistant", "content": processed_output})
             
             # 4. 输出结果
             outputs = []
@@ -125,6 +133,11 @@ class Agent:
 
             # 返回完整响应文本
             final_text = "".join(text_parts).strip()
+            
+            # 记录对话历史
+            self.conversation.append({"role": "user", "content": processed_input})
+            self.conversation.append({"role": "assistant", "content": final_text})
+            
             return final_text
             
         except Exception as e:
@@ -223,6 +236,61 @@ class Agent:
         """
         name = name or output.__class__.__name__
         self.output_manager.register(name, output, default)
+
+    async def _generate_summary(self) -> str:
+        """生成对话总结。"""
+        if not self.conversation:
+            return "空对话"
+            
+        # 构建总结提示
+        prompt = "请用一句话总结这个对话的主题（10字以内）：\n"
+        for msg in self.conversation[-2:]:  # 只看最后一轮对话
+            role_name = "用户" if msg["role"] == "user" else "助手"
+            prompt += f"{role_name}：{msg['content']}\n"
+            
+        try:
+            response = await self.provider.generate_response(prompt)
+            self.summary = response.strip()
+            return self.summary
+        except Exception as e:
+            print(f"生成总结失败：{e}")
+            return "未总结对话"
+
+    def _save_conversation(self) -> str:
+        """保存对话历史到文件。"""
+        if not self.conversation:
+            return
+            
+        # 创建保存目录
+        save_dir = os.path.expanduser("~/ai-agent/conversations")
+        os.makedirs(save_dir, exist_ok=True)
+        
+        # 生成文件名
+        date_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        summary = self.summary or "未总结对话"
+        file_name = f"{summary}_{date_str}.md"
+        file_path = os.path.join(save_dir, file_name)
+        
+        # 生成Markdown内容
+        content = [
+            f"# {summary}",
+            f"开始时间：{self.start_time.strftime('%Y-%m-%d %H:%M:%S')}",
+            f"结束时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            "",
+            "## 对话内容",
+            ""
+        ]
+        
+        # 添加对话记录
+        for msg in self.conversation:
+            role_name = "用户" if msg["role"] == "user" else "助手"
+            content.append(f"**{role_name}**: {msg['content']}\n")
+        
+        # 保存文件
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(content))
+        
+        return file_path
 
 class AgentBuilder:
     """AI代理构建器，用于简化Agent实例的创建过程。"""
