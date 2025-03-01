@@ -4,7 +4,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from ai_agent.providers.sustech import SustechProvider, test_api_key
+from ai_agent.providers.sustech import SustechProvider, verify_api_key
 from ai_agent.providers.base import ProviderError
 
 @pytest.fixture
@@ -149,15 +149,15 @@ def test_validate_config(sustech_provider):
         assert provider.validate_config() is False
 
 @pytest.mark.asyncio
-async def test_api_key_test():
+async def test_verify_api_key(sustech_config):
     """测试API密钥验证"""
     with patch("aiohttp.ClientSession.post") as mock_post:
         mock_context = AsyncMock()
         mock_context.__aenter__.return_value.status = 200
         mock_post.return_value = mock_context
-        assert await test_api_key("test_key") is True
+        assert await verify_api_key(sustech_config["api_key"]) is True
 
         # 测试无效密钥
         mock_context.__aenter__.return_value.status = 401
         mock_context.__aenter__.return_value.text = AsyncMock(return_value="Invalid API key")
-        assert await test_api_key("invalid_key") is False
+        assert await verify_api_key("invalid_key") is False

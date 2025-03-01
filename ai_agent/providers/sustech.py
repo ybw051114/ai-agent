@@ -2,7 +2,7 @@
 南科大API提供商实现。
 """
 import json
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import aiohttp
 from .base import BaseProvider, ProviderError, register_provider
@@ -50,12 +50,13 @@ class SustechProvider(BaseProvider):
         if self.session and not self.session.closed:
             await self.session.close()
             
-    async def generate_response(self, prompt: str) -> str:
+    async def generate_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> str:
         """
         生成回答。
         
         Args:
             prompt: 输入的问题或提示
+            conversation: 可选的历史对话记录
             
         Returns:
             str: 生成的回答
@@ -66,14 +67,19 @@ class SustechProvider(BaseProvider):
         try:
             await self._ensure_session()
             try:
+                messages = []
+                if conversation:
+                    messages.extend(conversation)
+                messages.append({
+                    "role": "user",
+                    "content": prompt
+                })
+                
                 async with self.session.post(
                     f"{self.config['base_url']}/chat/completions",
                     json={
                         "model": self.config["model"],
-                        "messages": [{
-                            "role": "user",
-                            "content": prompt
-                        }],
+                        "messages": messages,
                         "temperature": self.config["temperature"],
                         "max_tokens": self.config["max_tokens"],
                         "stream": False
@@ -96,12 +102,13 @@ class SustechProvider(BaseProvider):
         except Exception as e:
             raise ProviderError(f"生成回答失败: {str(e)}", "sustech")
             
-    async def stream_response(self, prompt: str) -> AsyncGenerator[str, None]:
+    async def stream_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> AsyncGenerator[str, None]:
         """
         流式生成回答。
         
         Args:
             prompt: 输入的问题或提示
+            conversation: 可选的历史对话记录
             
         Yields:
             str: 生成的部分回答
@@ -112,14 +119,19 @@ class SustechProvider(BaseProvider):
         try:
             await self._ensure_session()
             try:
+                messages = []
+                if conversation:
+                    messages.extend(conversation)
+                messages.append({
+                    "role": "user",
+                    "content": prompt
+                })
+                
                 async with self.session.post(
                     f"{self.config['base_url']}/chat/completions",
                     json={
                         "model": self.config["model"],
-                        "messages": [{
-                            "role": "user",
-                            "content": prompt
-                        }],
+                        "messages": messages,
                         "temperature": self.config["temperature"],
                         "max_tokens": self.config["max_tokens"],
                         "stream": True
@@ -185,7 +197,7 @@ class SustechProvider(BaseProvider):
         """退出异步上下文。"""
         await self._cleanup_session()
 
-async def test_api_key(api_key: str, base_url: str = "https://chat.sustech.edu.cn/api") -> bool:
+async def verify_api_key(api_key: str, base_url: str = "https://chat.sustech.edu.cn/api") -> bool:
     """
     测试API密钥是否有效。
     

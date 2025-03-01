@@ -3,7 +3,7 @@ AI代理核心功能的单元测试。
 """
 import asyncio
 import pytest
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, List, Dict
 
 from ai_agent.core.agent import Agent, AgentBuilder
 from ai_agent.providers.base import BaseProvider
@@ -19,12 +19,14 @@ class MockProvider(BaseProvider):
         self.response = response
         self.last_prompt = None
         
-    async def generate_response(self, prompt: str) -> str:
+    async def generate_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> str:
         self.last_prompt = prompt
+        self.last_conversation = conversation
         return self.response
         
-    async def stream_response(self, prompt: str) -> AsyncGenerator[str, None]:
+    async def stream_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> AsyncGenerator[str, None]:
         self.last_prompt = prompt
+        self.last_conversation = conversation
         yield "Hello "  # 第一个chunk
         yield "World"   # 第二个chunk
 
@@ -74,10 +76,19 @@ async def test_agent_basic_processing(mock_provider, mock_output):
     agent = Agent(mock_provider)
     agent.add_output(mock_output, default=True)
     
+    # 测试基本对话
     result = await agent.process("Test input")
-    
     assert mock_provider.last_prompt == "Test input"
     assert mock_output.last_output == result == "Hello, World!"
+    assert len(agent.conversation) == 2  # user + assistant消息
+    
+    # 测试历史对话传递
+    expected_history = agent.conversation.copy()  # 复制当前历史
+    expected_history.append({"role": "user", "content": "Second input"})
+    expected_history.append({"role": "assistant", "content": "Hello, World!"})
+    result = await agent.process("Second input")
+    assert mock_provider.last_conversation == expected_history  # 验证使用了之前的历史
+    assert len(agent.conversation) == 4  # 累积4条消息
 
 @pytest.mark.asyncio
 async def test_agent_with_plugin(mock_provider, mock_plugin, mock_output):
@@ -97,12 +108,21 @@ async def test_agent_stream_processing(mock_provider, mock_output):
     agent = Agent(mock_provider)
     agent.add_output(mock_output, default=True)
     
+    # 测试基本流式对话
     result = await agent.process_stream("Test input")
-    
     assert mock_provider.last_prompt == "Test input"
     assert result == "Hello World"  # 完整输出
     assert mock_output.last_output == "World"  # 最后一个chunk
     assert mock_output.stream_output == ["Hello ", "World"]  # 流式输出记录
+    assert len(agent.conversation) == 2  # user + assistant消息
+    
+    # 测试历史对话传递
+    expected_history = agent.conversation.copy()  # 复制当前历史
+    expected_history.append({"role": "user", "content": "Second input"})
+    expected_history.append({"role": "assistant", "content": "Hello World"})
+    result = await agent.process_stream("Second input")
+    assert mock_provider.last_conversation == expected_history  # 验证使用了之前的历史
+    assert len(agent.conversation) == 4  # 累积4条消息
 
 @pytest.mark.asyncio
 async def test_agent_stream_with_plugin(mock_provider, mock_plugin, mock_output):
@@ -150,13 +170,31 @@ def test_agent_builder():
     assert agent.config["test_key"] == "test_value"
 
 @pytest.mark.asyncio
+async def test_generate_summary(mock_provider, mock_output):
+    """测试对话总结生成功能。"""
+    agent = Agent(mock_provider)
+    agent.add_output(mock_output, default=True)
+    
+    # 添加一些对话历史
+    agent.conversation = [
+        {"role": "user", "content": "你好"},
+        {"role": "assistant", "content": "你好！有什么我可以帮你的吗？"}
+    ]
+    
+    summary = await agent._generate_summary()
+    assert summary == "Hello World"  # 基于MockProvider的输出
+    assert agent.summary == summary  # 确保summary被正确保存
+    # 确保总结生成时使用了对话历史
+    assert mock_provider.last_conversation == agent.conversation
+
+@pytest.mark.asyncio
 async def test_agent_error_handling(mock_output):
     """测试代理的错误处理。"""
     class ErrorProvider(BaseProvider):
-        async def generate_response(self, prompt: str) -> str:
+        async def generate_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> str:
             raise Exception("Test error")
             
-        async def stream_response(self, prompt: str) -> AsyncGenerator[str, None]:
+        async def stream_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> AsyncGenerator[str, None]:
             raise Exception("Test error")
     
     agent = Agent(ErrorProvider())

@@ -227,13 +227,25 @@ def chat(
     finally:
         if agent:
             try:
-                # 生成总结并保存对话
-                if hasattr(agent, '_generate_summary'):
-                    asyncio.run(agent._generate_summary())
-                if hasattr(agent, '_save_conversation'):
-                    save_path = agent._save_conversation()
-                    if save_path:
-                        console.print(f"\n[green]对话已保存到：{save_path}[/green]")
+                if not prompt:
+                    # 生成总结并保存对话
+                    if hasattr(agent, '_generate_summary'):
+                        asyncio.run(agent._generate_summary())
+                    if hasattr(agent, '_save_conversation'):
+                        save_path = agent._save_conversation()
+                        if save_path:
+                            console.print(f"\n[green]对话已保存到：{save_path}[/green]")
+                # # 生成总结并保存对话
+                # if prompt:
+                #     if hasattr(agent, '_generate_summary'):
+                #         asyncio.run(agent._generate_summary())
+                # else:
+                #     # 保存对话
+                #     if hasattr(agent, '_save_conversation_stream')
+                # if hasattr(agent, '_save_conversation'):
+                #     save_path = agent._save_conversation()
+                #     if save_path:
+                #         console.print(f"\n[green]对话已保存到：{save_path}[/green]")
             except Exception as e:
                 print_error(f"保存对话失败：{e}")
 

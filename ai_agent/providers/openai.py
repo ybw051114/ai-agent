@@ -2,7 +2,7 @@
 OpenAI提供商实现。
 """
 import asyncio
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from openai import AsyncOpenAI, APIError
 import aiohttp
@@ -40,12 +40,13 @@ class OpenAIProvider(BaseProvider):
         # 初始化API客户端
         self.client = AsyncOpenAI(api_key=self.config["api_key"])
         
-    async def generate_response(self, prompt: str) -> str:
+    async def generate_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> str:
         """
         生成回答。
         
         Args:
             prompt: 输入的问题或提示
+            conversation: 可选的历史对话记录
             
         Returns:
             str: 生成的回答
@@ -54,12 +55,17 @@ class OpenAIProvider(BaseProvider):
             ProviderError: 当调用API出错时抛出
         """
         try:
+            messages = []
+            if conversation:
+                messages.extend(conversation)
+            messages.append({
+                "role": "user",
+                "content": prompt
+            })
+            
             response = await self.client.chat.completions.create(
                 model=self.config["model"],
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }],
+                messages=messages,
                 temperature=self.config["temperature"],
                 max_tokens=self.config["max_tokens"],
                 stream=False  # 非流式请求
@@ -72,12 +78,13 @@ class OpenAIProvider(BaseProvider):
         except Exception as e:
             raise ProviderError(f"生成回答失败: {str(e)}", "openai")
             
-    async def stream_response(self, prompt: str) -> AsyncGenerator[str, None]:
+    async def stream_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> AsyncGenerator[str, None]:
         """
         流式生成回答。
         
         Args:
             prompt: 输入的问题或提示
+            conversation: 可选的历史对话记录
             
         Yields:
             str: 生成的部分回答
@@ -86,12 +93,17 @@ class OpenAIProvider(BaseProvider):
             ProviderError: 当调用API出错时抛出
         """
         try:
+            messages = []
+            if conversation:
+                messages.extend(conversation)
+            messages.append({
+                "role": "user",
+                "content": prompt
+            })
+            
             stream = await self.client.chat.completions.create(
                 model=self.config["model"],
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }],
+                messages=messages,
                 temperature=self.config["temperature"],
                 max_tokens=self.config["max_tokens"],
                 stream=True  # 流式请求

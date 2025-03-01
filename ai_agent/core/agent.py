@@ -48,11 +48,13 @@ class Agent:
         """
         # 1. 应用所有插件的预处理
         processed_input = self._apply_pre_process(input_text)
-        self.conversation.append({"role": "user", "content": processed_input})
         
         try:
-            # 2. 调用AI提供商生成回答
-            response = await self.provider.generate_response(processed_input)
+            # 2. 调用AI提供商生成回答（使用当前历史）
+            response = await self.provider.generate_response(processed_input, self.conversation)
+            
+            # 3. 更新对话历史
+            self.conversation.append({"role": "user", "content": processed_input})
             
             # 3. 应用所有插件的后处理
             processed_output = self._apply_post_process(response)
@@ -103,12 +105,15 @@ class Agent:
             else:
                 outputs = [self.output_manager.get_output(output_name)]
             
-            # 3. 流式生成并处理回答
-            response_stream = self.provider.stream_response(processed_input)
+            # 3. 流式生成并处理回答（使用当前历史）
+            response_stream = self.provider.stream_response(processed_input, self.conversation)
             
             # 4. 流式输出并收集完整文本
             text_parts = []
             chunks = []
+            
+            # 更新对话历史
+            self.conversation.append({"role": "user", "content": processed_input})
             
             # 复制流内容以供后续使用
             async for chunk in response_stream:
@@ -131,11 +136,8 @@ class Agent:
             # 等待所有输出处理完成
             await asyncio.gather(*stream_tasks)
 
-            # 返回完整响应文本
+            # 返回完整响应文本并更新对话历史
             final_text = "".join(text_parts).strip()
-            
-            # 记录对话历史
-            self.conversation.append({"role": "user", "content": processed_input})
             self.conversation.append({"role": "assistant", "content": final_text})
             
             return final_text
@@ -243,14 +245,17 @@ class Agent:
             return "空对话"
             
         # 构建总结提示
-        prompt = "请用一句话总结这个对话的主题（10字以内）：\n"
-        for msg in self.conversation[-2:]:  # 只看最后一轮对话
-            role_name = "用户" if msg["role"] == "user" else "助手"
-            prompt += f"{role_name}：{msg['content']}\n"
+        prompt = "请用一句话总结这个对话的主题以作为标题（10字以内）："
             
         try:
-            response = await self.provider.generate_response(prompt)
-            self.summary = response.strip()
+            # 获取流式响应并收集所有文本
+            response_stream = self.provider.stream_response(prompt, self.conversation)
+            text_parts = []
+            async for chunk in response_stream:
+                text_parts.append(chunk)
+                
+            # 合并所有文本并保存
+            self.summary = "".join(text_parts).strip()
             return self.summary
         except Exception as e:
             print(f"生成总结失败：{e}")

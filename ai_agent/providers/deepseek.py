@@ -2,7 +2,7 @@
 DeepSeek提供商实现。
 """
 import json
-from typing import Any, AsyncGenerator, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 import aiohttp
 
@@ -39,12 +39,13 @@ class DeepSeekProvider(BaseProvider):
         # API endpoint
         self.api_url = "https://api.deepseek.com/v1/chat/completions"
         
-    async def generate_response(self, prompt: str) -> str:
+    async def generate_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> str:
         """
         生成回答。
         
         Args:
             prompt: 输入的问题或提示
+            conversation: 可选的历史对话记录
             
         Returns:
             str: 生成的回答
@@ -57,12 +58,17 @@ class DeepSeekProvider(BaseProvider):
             "Content-Type": "application/json"
         }
         
+        messages = []
+        if conversation:
+            messages.extend(conversation)
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        
         data = {
             "model": self.config["model"],
-            "messages": [{
-                "role": "user",
-                "content": prompt
-            }],
+            "messages": messages,
             "temperature": self.config["temperature"],
             "max_tokens": self.config["max_tokens"],
             "stream": False
@@ -83,12 +89,13 @@ class DeepSeekProvider(BaseProvider):
         except Exception as e:
             raise ProviderError(f"生成回答失败: {str(e)}", "deepseek")
             
-    async def stream_response(self, prompt: str) -> AsyncGenerator[str, None]:
+    async def stream_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> AsyncGenerator[str, None]:
         """
         流式生成回答。
         
         Args:
             prompt: 输入的问题或提示
+            conversation: 可选的历史对话记录
             
         Yields:
             str: 生成的部分回答
@@ -101,12 +108,17 @@ class DeepSeekProvider(BaseProvider):
             "Content-Type": "application/json"
         }
         
+        messages = []
+        if conversation:
+            messages.extend(conversation)
+        messages.append({
+            "role": "user",
+            "content": prompt
+        })
+        
         data = {
             "model": self.config["model"],
-            "messages": [{
-                "role": "user",
-                "content": prompt
-            }],
+            "messages": messages,
             "temperature": self.config["temperature"],
             "max_tokens": self.config["max_tokens"],
             "stream": True
@@ -119,29 +131,25 @@ class DeepSeekProvider(BaseProvider):
                         error_text = await response.text()
                         raise ProviderError(f"API调用失败: {error_text}", "deepseek")
                         
-                    # 处理流式响应
-                    async def process_chunks():
-                        async for line in response.content:
-                            if line:
-                                try:
-                                    chunk = line.decode('utf-8').strip()
-                                    if chunk.startswith('data: '):
-                                        chunk = chunk[6:]  # 去掉 'data: ' 前缀
-                                        if chunk != '[DONE]':
-                                            try:
-                                                chunk_data = json.loads(chunk)
-                                                content = chunk_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
-                                                if content:
-                                                    yield content
-                                            except json.JSONDecodeError:
-                                                continue
-                                except Exception as e:
-                                    # 记录错误但继续处理
-                                    print(f"Error processing chunk: {str(e)}")
-                                    continue
-
-                    async for content in process_chunks():
-                        yield content
+                    async for line in response.content:
+                        if not line:
+                            continue
+                            
+                        try:
+                            chunk = line.decode('utf-8').strip()
+                            if not chunk.startswith('data: '):
+                                continue
+                                
+                            chunk = chunk[6:]  # 去掉 'data: ' 前缀
+                            if chunk == '[DONE]':
+                                break
+                                
+                            chunk_data = json.loads(chunk)
+                            if content := chunk_data.get('choices', [{}])[0].get('delta', {}).get('content', ''):
+                                yield content
+                        except Exception as e:
+                            print(f"Error processing chunk: {str(e)}")
+                            continue
                     
         except aiohttp.ClientError as e:
             raise ProviderError(f"网络请求失败: {str(e)}", "deepseek")

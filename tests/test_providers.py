@@ -49,13 +49,23 @@ async def test_generate_response(deepseek_provider):
         }]
     }
     
+    conversation = [
+        {"role": "user", "content": "Hi there"},
+        {"role": "assistant", "content": "Hello! How can I help?"}
+    ]
+    
     with patch("aiohttp.ClientSession.post") as mock_post:
         mock_context = AsyncMock()
         mock_context.__aenter__.return_value.status = 200
         mock_context.__aenter__.return_value.json = AsyncMock(return_value=mock_response)
         mock_post.return_value = mock_context
         
+        # 测试无历史对话的情况
         response = await deepseek_provider.generate_response("Hi")
+        assert response == "Hello!"
+        
+        # 测试有历史对话的情况
+        response = await deepseek_provider.generate_response("Hi", conversation)
         assert response == "Hello!"
 
 @pytest.mark.asyncio
@@ -78,6 +88,11 @@ async def test_stream_response(deepseek_provider):
         b'data: {"choices":[{"delta":{"content":"Hello"}}]}\n',
         b'data: {"choices":[{"delta":{"content":" World"}}]}\n',
         b'data: [DONE]\n'
+    ]
+    
+    conversation = [
+        {"role": "user", "content": "Hi there"},
+        {"role": "assistant", "content": "Hello! How can I help?"}
     ]
 
     class MockStream:
@@ -103,6 +118,7 @@ async def test_stream_response(deepseek_provider):
         async def text(self):
             return "Success"
     
+    # 测试无历史对话的情况
     with patch("aiohttp.ClientSession.post") as mock_post:
         mock_context = AsyncMock()
         mock_context.__aenter__.return_value = MockResponse(mock_chunks)
@@ -111,7 +127,19 @@ async def test_stream_response(deepseek_provider):
         chunks = []
         async for chunk in deepseek_provider.stream_response("Hi"):
             chunks.append(chunk)
+        assert len(chunks) == 2
+        assert chunks[0] == "Hello"
+        assert chunks[1] == " World"
         
+    # 测试有历史对话的情况
+    with patch("aiohttp.ClientSession.post") as mock_post:
+        mock_context = AsyncMock()
+        mock_context.__aenter__.return_value = MockResponse(mock_chunks)
+        mock_post.return_value = mock_context
+        
+        chunks = []
+        async for chunk in deepseek_provider.stream_response("Hi", conversation):
+            chunks.append(chunk)
         assert len(chunks) == 2
         assert chunks[0] == "Hello"
         assert chunks[1] == " World"

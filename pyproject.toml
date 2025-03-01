@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ai-agent"
-version = "0.1.1"
+version = "0.2.0"
 description = "一个遵循Unix哲学的AI命令行代理"
 authors = ["Bowen Yang <ybw051114@gmail.com>"]
 

@@ -2,7 +2,7 @@
 AI提供商的基础接口定义。
 """
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 
 class BaseProvider(ABC):
@@ -21,12 +21,13 @@ class BaseProvider(ABC):
         self.config = config or {}
 
     @abstractmethod
-    async def generate_response(self, prompt: str) -> str:
+    async def generate_response(self, prompt: str, conversation: Optional[List[Dict]] = None) -> str:
         """
         生成对问题的回答。
         
         Args:
             prompt: 输入的问题或提示
+            conversation: 可选的历史对话记录
             
         Returns:
             str: AI生成的回答
@@ -37,12 +38,13 @@ class BaseProvider(ABC):
         pass
 
     @abstractmethod
-    async def stream_response(self, prompt: str):
+    async def stream_response(self, prompt: str, conversation: Optional[List[Dict]] = None):
         """
         流式生成回答。
         
         Args:
             prompt: 输入的问题或提示
+            conversation: 可选的历史对话记录
             
         Yields:
             str: AI生成的部分回答
