@@ -18,6 +18,7 @@ from .output.terminal import TerminalOutput
 from .providers.openai import OpenAIProvider
 from .providers.deepseek import DeepSeekProvider
 from .providers.sustech import SustechProvider
+from .providers.ark import ArkProvider
 
 console = Console()
 
@@ -43,8 +44,11 @@ def validate_model(provider: str, model: str) -> bool:
     provider_models = {
         "openai": ["gpt-3.5-turbo", "gpt-4"],
         "deepseek": ["deepseek-chat", "deepseek-coder"],
-        "sustech": ["deepseek-r1-250120"]
+        "sustech": ["deepseek-r1-250120"],
+        "ark": ["claude-2.1"]
     }
+    if model == "ark":
+        return True
     
     return model in provider_models.get(provider, [])
 
@@ -73,7 +77,7 @@ def setup_agent(
     
     # 2. 命令行参数覆盖配置文件
     if provider:
-        if provider not in ["openai", "deepseek", "sustech"]:
+        if provider not in ["openai", "deepseek", "sustech", "ark"]:
             print_error(f"不支持的AI提供商：{provider}")
             sys.exit(1)
         config_manager.config.provider = provider
@@ -85,7 +89,8 @@ def setup_agent(
             provider_models = {
                 "openai": ["gpt-3.5-turbo", "gpt-4"],
                 "deepseek": ["deepseek-chat", "deepseek-coder"],
-                "sustech": ["deepseek-r1-250120"]
+                "sustech": ["deepseek-r1-250120"],
+                "ark": ["claude-2.1"]
             }
             for m in provider_models.get(config_manager.config.provider, []):
                 print_warning(f"  - {m}")
@@ -103,7 +108,8 @@ def setup_agent(
         env_var = {
             "openai": "OPENAI_API_KEY",
             "deepseek": "DEEPSEEK_API_KEY",
-        "sustech": "SUSTECH_API_KEY"
+            "sustech": "SUSTECH_API_KEY",
+            "ark": "ARK_API_KEY"
         }.get(provider, "API_KEY")
         print_error(f"未设置API密钥。请设置{env_var}环境变量或在配置文件中指定。")
         sys.exit(1)
@@ -115,7 +121,8 @@ def setup_agent(
     provider_map = {
         "openai": OpenAIProvider,
         "deepseek": DeepSeekProvider,
-        "sustech": SustechProvider
+        "sustech": SustechProvider,
+        "ark": ArkProvider
     }
     
     provider_class = provider_map.get(config_manager.config.provider)
@@ -152,8 +159,8 @@ def cli():
 
 @cli.command()
 @click.argument("prompt", required=False)
-@click.option("-p", "--provider", help="AI提供商 (支持: openai, deepseek, sustech)")
-@click.option("-m", "--model", help="模型名称 (openai: gpt-3.5-turbo等, deepseek: deepseek-chat等, sustech: deepseek-r1-250120)")
+@click.option("-p", "--provider", help="AI提供商 (支持: openai, deepseek, sustech, ark)")
+@click.option("-m", "--model", help="模型名称 (openai: gpt-3.5-turbo等, deepseek: deepseek-chat等, sustech: deepseek-r1-250120, ark: claude-2.1)")
 @click.option("--plugins", help="要使用的插件，逗号分隔")
 @click.option("-o", "--output", help="输出处理器")
 @click.option("--config", help="配置文件路径")
